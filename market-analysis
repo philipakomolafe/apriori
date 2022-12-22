@@ -1,0 +1,61 @@
+#import necessary packages.
+import pandas as pd
+import matplotlib.pyplot as plt
+import os
+for dirname, _, filenames in os.walk('/kaggle/input'):
+    for filename in filenames:
+        print(os.path.join(dirname, filename))
+        
+
+raw = pd.read_csv("../input/groceries-dataset/Groceries_dataset.csv")
+raw.head()
+
+#checking for NaN values.
+print(f"Checking for NULL-values: {raw.isnull().sum().sum()}\n") #None found
+raw.info
+
+#converting the Date column to datetime Datatype.
+raw["Date"] = raw["Date"].astype("datetime64[ns]") #converting to datetime: df[col] = pd.to_datetime(df[col])
+raw["Date"].info
+
+plt.style.use("seaborn-darkgrid")
+plt.figure(figsize=(25,10))
+
+#Absolute frequency
+grouped = raw[['itemDescription']].groupby('itemDescription').size().head(40)
+grouped.sort_values(ascending=False).plot(kind='bar').set(title="TOP 40 ITEMS SOLD", ylabel= "QTY SOLD", xlabel= "ITEMS")
+# BOTTLED WATER was purchased more under absolute frequency plot.
+
+rel_freq=((raw['itemDescription'].value_counts()/len(raw)).head(20))
+rel_freq.sort_values(ascending=False).plot(kind="bar", color="orange").set(title="TOP 20 ITEMS SOLD", ylabel= "QTY SOLD", xlabel= "RElATIVE FREQUENCY OF ITEMS")
+#WHOLE MILK was purchased more under relative frequency plot.
+
+raw_date = raw.set_index("Date")
+raw_date
+
+raw_date.resample("M")["itemDescription"].count().plot(figsize=(15,8),label="Month", color="red")
+raw_date.resample("W")["itemDescription"].count().plot(label="Week")
+raw_date.resample("D")["itemDescription"].count().plot(label="Day")
+plt.ylabel("Qty. Sold")
+plt.title("Sales Plot")
+plt.legend()
+
+cust_level = raw[["Member_number","itemDescription"]].sort_values(by="Member_number",ascending=False)
+cust_level["itemDescription"] = cust_level["itemDescription"].str.strip()
+cust_level
+
+transactions = [a[1]['itemDescription'].tolist() for a in list(cust_level.groupby(['Member_number']))] ## Combing all the items in list format for each cutomer
+from apyori import apriori ## Importing apriori package
+rules = apriori(transactions = transactions, min_support = 0.002, min_confidence = 0.05, min_lift = 3, min_length = 2, max_length = 2) ## Model Creation
+results = list(rules)
+
+def inspect(results):
+    lhs         = [tuple(result[2][0][0])[0] for result in results]
+    rhs         = [tuple(result[2][0][1])[0] for result in results]
+    supports    = [result[1] for result in results]
+    confidences = [result[2][0][2] for result in results]
+    lifts       = [result[2][0][3] for result in results]
+    return list(zip(lhs, rhs, supports, confidences, lifts))
+resultsinDataFrame = pd.DataFrame(inspect(results), columns = ['Left Hand Side', 'Right Hand Side', 'Support', 'Confidence', 'Lift'])
+
+resultsinDataFrame.nlargest(n= 10, columns=['Support', 'Confidence', 'Lift'])
